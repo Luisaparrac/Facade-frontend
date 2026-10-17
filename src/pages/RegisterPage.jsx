@@ -6,10 +6,15 @@ import { useToast } from '../context/ToastContext';
 import { usePageTitle } from '../hooks/usePageTitle';
 import { calculateAge, toISODate } from '../utils/format';
 import { AuthLayout } from '../components/AuthLayout';
-import { PasswordField, TagInput, TextField } from '../components/FormFields';
+import { PasswordField, SelectField, TagInput, TextField } from '../components/FormFields';
+import { DOCUMENT_TYPES } from '../constants';
 import { Alert, Button } from '../components/ui';
 
+const DOCUMENT_OPTIONS = Object.entries(DOCUMENT_TYPES)
+  .map(([value, { label, short }]) => ({ value, label: `${short} · ${label}` }));
+
 const INITIAL_FORM = {
+  documentType: 'CITIZEN_ID',
   firstName: '',
   lastName: '',
   documentNumber: '',
@@ -20,26 +25,27 @@ const INITIAL_FORM = {
   confirmPassword: '',
 };
 
-function validate(form) {
+function validate(form, allergies) {
   const errors = {};
   if (form.firstName.trim().length < 2) errors.firstName = 'Ingresa tus nombres';
   if (form.lastName.trim().length < 2) errors.lastName = 'Ingresa tus apellidos';
-  if (!/^\d{6,12}$/.test(form.documentNumber.trim())) errors.documentNumber = 'Debe tener entre 6 y 12 dígitos';
+  if (!/^[A-Za-z0-9]{5,15}$/.test(form.documentNumber.trim())) errors.documentNumber = 'Entre 5 y 15 letras o dígitos';
 
   if (!form.birthDate) errors.birthDate = 'Selecciona tu fecha de nacimiento';
   else {
     const age = calculateAge(form.birthDate);
-    if (age < 0 || age > 120) errors.birthDate = 'Fecha de nacimiento no válida';
+    if (age < 0 || age > 120 || form.birthDate >= toISODate(new Date())) errors.birthDate = 'Fecha de nacimiento no válida';
   }
 
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) errors.email = 'Ingresa un correo válido';
   if (!/^\d{7,15}$/.test(form.phone.replace(/[\s-]/g, ''))) errors.phone = 'Ingresa un teléfono válido (7 a 15 dígitos)';
 
-  if (form.password.length < 8) errors.password = 'Mínimo 8 caracteres';
+  if (form.password.length < 8 || form.password.length > 72) errors.password = 'Entre 8 y 72 caracteres';
   else if (!/\d/.test(form.password) || !/[a-zA-Z]/.test(form.password)) {
     errors.password = 'Debe combinar letras y números';
   }
   if (form.confirmPassword !== form.password) errors.confirmPassword = 'Las contraseñas no coinciden';
+  if (allergies.some((a) => a.length < 3 || a.length > 80)) errors.allergies = 'Cada alergia debe tener entre 3 y 80 caracteres';
   return errors;
 }
 
@@ -64,13 +70,14 @@ export default function RegisterPage() {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    const validationErrors = validate(form);
+    const validationErrors = validate(form, allergies);
     setErrors(validationErrors);
     if (Object.keys(validationErrors).length) return;
 
     setSubmitting(true);
     try {
       const patient = await register({
+        documentType: form.documentType,
         firstName: form.firstName.trim(),
         lastName: form.lastName.trim(),
         documentNumber: form.documentNumber.trim(),
@@ -106,10 +113,10 @@ export default function RegisterPage() {
             <div className="form-grid">
               <TextField label="Nombres" icon={UserRound} autoComplete="given-name" placeholder="María Fernanda" {...fieldProps('firstName')} />
               <TextField label="Apellidos" autoComplete="family-name" placeholder="González Pérez" {...fieldProps('lastName')} />
+              <SelectField label="Tipo de documento" options={DOCUMENT_OPTIONS} {...fieldProps('documentType')} />
               <TextField
                 label="Número de documento"
                 icon={CreditCard}
-                inputMode="numeric"
                 placeholder="1023456789"
                 hint="Será tu usuario para iniciar sesión"
                 {...fieldProps('documentNumber')}
@@ -136,6 +143,7 @@ export default function RegisterPage() {
               placeholder="Ej. Penicilina — presiona Enter para agregar"
               hint="Se usan para validar tus prescripciones. Déjalo vacío si no tienes alergias."
             />
+            {errors.allergies && <p className="field-error">{errors.allergies}</p>}
           </fieldset>
 
           <fieldset className="form-section">

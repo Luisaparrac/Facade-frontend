@@ -69,7 +69,7 @@ export function LabOrderCard({ order }) {
           <IconTile icon={FlaskConical} tone="violet" />
           <div>
             <h3>{exam.label}</h3>
-            <p className="text-muted text-sm">{formatDate(order.requestedAt)} · Orden {order.id}</p>
+            <p className="text-muted text-sm">{formatDate(order.requestedAt)} · Orden {order.orderId ?? order.id}</p>
           </div>
         </div>
         {results.length === 0 ? (

@@ -44,7 +44,7 @@ export function getSpecialty(code) {
 }
 
 export const EXAM_TYPES = {
-  HEMOGRAM: {
+  CBC: {
     label: 'Hemograma',
     description: 'Hemoglobina, hematocrito, leucocitos y plaquetas.',
   },
@@ -60,6 +60,16 @@ export const EXAM_TYPES = {
 
 export const getExamType = (code) =>
   EXAM_TYPES[code] ?? { label: humanizeCode(code), description: '' };
+
+export const DOCUMENT_TYPES = {
+  CITIZEN_ID: { label: 'Cédula de ciudadanía', short: 'CC' },
+  IDENTITY_CARD: { label: 'Tarjeta de identidad', short: 'TI' },
+  FOREIGNER_ID: { label: 'Cédula de extranjería', short: 'CE' },
+  PASSPORT: { label: 'Pasaporte', short: 'PA' },
+};
+
+export const getDocumentLabel = (patient) =>
+  `${DOCUMENT_TYPES[patient.documentType]?.short ?? 'Doc.'} ${patient.documentNumber}`;
 
 export const APPOINTMENT_STATUS = {
   SCHEDULED: { label: 'Programada', tone: 'info' },

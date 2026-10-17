@@ -1,21 +1,24 @@
-import { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { clinicApi } from '../api';
+import { setAuthToken, setUnauthorizedHandler } from '../api/httpClient';
+import { useToast } from './ToastContext';
 
-const SESSION_KEY = 'clinic-portal-session';
+const SESSION_KEY = 'clinic-portal-session-v2';
 const AuthContext = createContext(null);
 
 function readSession() {
   try {
     const raw = localStorage.getItem(SESSION_KEY);
-    return raw ? JSON.parse(raw) : null;
+    const session = raw ? JSON.parse(raw) : null;
+    return session?.token && session?.patient ? session : null;
   } catch {
     return null;
   }
 }
 
-function writeSession(patient) {
+function writeSession(session) {
   try {
-    if (patient) localStorage.setItem(SESSION_KEY, JSON.stringify(patient));
+    if (session) localStorage.setItem(SESSION_KEY, JSON.stringify(session));
     else localStorage.removeItem(SESSION_KEY);
   } catch {
     // Storage unavailable: session lasts until the tab is closed.
@@ -23,12 +26,25 @@ function writeSession(patient) {
 }
 
 export function AuthProvider({ children }) {
-  const [patient, setPatient] = useState(readSession);
+  const toast = useToast();
+  const [session, setSession] = useState(() => {
+    const stored = readSession();
+    setAuthToken(stored?.token ?? null);
+    return stored;
+  });
 
-  const startSession = useCallback((profile) => {
-    setPatient(profile);
-    writeSession(profile);
-    return profile;
+  const startSession = useCallback(({ token, patient }) => {
+    const next = { token, patient };
+    setAuthToken(token);
+    setSession(next);
+    writeSession(next);
+    return patient;
+  }, []);
+
+  const endSession = useCallback(() => {
+    setAuthToken(null);
+    setSession(null);
+    writeSession(null);
   }, []);
 
   const login = useCallback(
@@ -36,19 +52,29 @@ export function AuthProvider({ children }) {
     [startSession],
   );
 
-  const register = useCallback(
-    async (data) => startSession(await clinicApi.registerPatient(data)),
-    [startSession],
-  );
+  /** Registers the patient and signs in with the same credentials. */
+  const register = useCallback(async (data) => {
+    await clinicApi.registerPatient(data);
+    return startSession(await clinicApi.login({ documentNumber: data.documentNumber, password: data.password }));
+  }, [startSession]);
 
   const logout = useCallback(() => {
-    setPatient(null);
-    writeSession(null);
-  }, []);
+    clinicApi.logout();
+    endSession();
+  }, [endSession]);
+
+  // Expired or invalid token (e.g. the in-memory backend restarted): force a new login.
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      endSession();
+      toast.error('Tu sesión expiró. Inicia sesión nuevamente.');
+    });
+    return () => setUnauthorizedHandler(null);
+  }, [endSession, toast]);
 
   const value = useMemo(
-    () => ({ patient, isAuthenticated: Boolean(patient), login, register, logout }),
-    [patient, login, register, logout],
+    () => ({ patient: session?.patient ?? null, isAuthenticated: Boolean(session), login, register, logout }),
+    [session, login, register, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

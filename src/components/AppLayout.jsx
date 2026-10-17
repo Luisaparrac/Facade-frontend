@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { USE_MOCK_API } from '../config';
+import { getDocumentLabel } from '../constants';
 import { Avatar } from './ui';
 import { BrandMark } from './BrandMark';
 
@@ -80,7 +81,7 @@ export function AppLayout() {
             <Avatar firstName={patient.firstName} lastName={patient.lastName} />
             <div className="topbar-user-text">
               <span className="topbar-user-name">{patient.firstName} {patient.lastName}</span>
-              <span className="topbar-user-meta">CC {patient.documentNumber}</span>
+              <span className="topbar-user-meta">{getDocumentLabel(patient)}</span>
             </div>
             <button type="button" className="icon-button" onClick={handleLogout} aria-label="Cerrar sesión" title="Cerrar sesión">
               <LogOut aria-hidden />

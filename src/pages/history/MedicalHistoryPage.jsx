@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { usePageTitle } from '../../hooks/usePageTitle';
 import { usePatientHistory } from '../../hooks/usePatientHistory';
 import { calculateAge, formatDate } from '../../utils/format';
+import { getDocumentLabel } from '../../constants';
 import { Avatar, Badge, ErrorState, PageHeader, Skeleton } from '../../components/ui';
 import { ConsultationsTab } from './ConsultationsTab';
 import { PrescriptionsTab } from './PrescriptionsTab';
@@ -25,7 +26,7 @@ function PatientSummary({ patient }) {
         <div>
           <h2>{patient.firstName} {patient.lastName}</h2>
           <p className="text-muted">
-            CC {patient.documentNumber}
+            {getDocumentLabel(patient)}
             {age != null && ` · ${age} años`}
           </p>
         </div>

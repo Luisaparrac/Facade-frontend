@@ -6,9 +6,9 @@ import { ApiError } from './httpClient';
 import { toISODate, toLocalDateTime } from '../utils/format';
 import { findAllergyConflict } from '../utils/text';
 
-const STORAGE_KEY = 'clinic-portal-mock-db-v1';
+const STORAGE_KEY = 'clinic-portal-mock-db-v2';
 
-export const DEMO_CREDENTIALS = { documentNumber: '1000000001', password: 'demo1234' };
+export const DEMO_CREDENTIALS = { documentNumber: '1000000001', password: 'Demo1234!' };
 
 const DOCTORS = [
   { id: 'DOC-1', fullName: 'Dra. Laura Méndez', specialty: 'GENERAL_MEDICINE', yearsOfExperience: 12 },
@@ -24,7 +24,7 @@ const SLOT_TIMES = [
 ];
 
 const LAB_CATALOG = {
-  HEMOGRAM: [
+  CBC: [
     { parameter: 'Hemoglobina', unit: 'g/dL', referenceMin: 12, referenceMax: 17.5 },
     { parameter: 'Hematocrito', unit: '%', referenceMin: 36, referenceMax: 52 },
     { parameter: 'Leucocitos', unit: '×10³/µL', referenceMin: 4.5, referenceMax: 11 },
@@ -50,11 +50,13 @@ const newId = (prefix) =>
 const round = (value) => Math.round(value * 10) / 10;
 const findDoctor = (id) => DOCTORS.find((doctor) => doctor.id === id);
 
-/** Seed date relative to today, moved off Sunday (the clinic is closed). */
+const isWeekend = (date) => date.getDay() === 0 || date.getDay() === 6;
+
+/** Seed date relative to today, moved to the next business day (the clinic is closed on weekends). */
 function dateTimeFromToday(days, time) {
   const date = new Date();
   date.setDate(date.getDate() + days);
-  if (date.getDay() === 0) date.setDate(date.getDate() + 1);
+  while (isWeekend(date)) date.setDate(date.getDate() + 1);
   return `${toISODate(date)}T${time}`;
 }
 
@@ -100,6 +102,7 @@ function seedDatabase() {
     patients: [
       {
         id: patientId,
+        documentType: 'CITIZEN_ID',
         documentNumber: DEMO_CREDENTIALS.documentNumber,
         firstName: 'María',
         lastName: 'González',
@@ -143,8 +146,8 @@ function seedDatabase() {
         doctorId: 'DOC-1',
         issuedAt: dateTimeFromToday(-30, '10:20'),
         medications: [
-          { name: 'Atorvastatina', dose: '20 mg cada noche', durationDays: 90 },
-          { name: 'Omega 3', dose: '1 g cada 12 horas', durationDays: 90 },
+          { name: 'Atorvastatina', dose: '20 mg', frequency: 'Cada noche', durationDays: 90 },
+          { name: 'Omega 3', dose: '1 g', frequency: 'Cada 12 horas', durationDays: 90 },
         ],
       },
       {
@@ -153,15 +156,15 @@ function seedDatabase() {
         doctorId: 'DOC-5',
         issuedAt: dateTimeFromToday(-75, '15:50'),
         medications: [
-          { name: 'Hidrocortisona crema 1%', dose: 'Aplicar 2 veces al día', durationDays: 10 },
-          { name: 'Loratadina', dose: '10 mg cada 24 horas', durationDays: 7 },
+          { name: 'Hidrocortisona crema 1%', dose: 'Capa delgada', frequency: '2 veces al día', durationDays: 10 },
+          { name: 'Loratadina', dose: '10 mg', frequency: 'Cada 24 horas', durationDays: 7 },
         ],
       },
     ],
     labOrders: [
       { id: 'LAB-4003', patientId, examType: 'LIPID_PROFILE', requestedAt: dateTimeFromToday(-28, '07:10'), status: 'COMPLETED', results: buildResults('LIPID_PROFILE', [212, 48, 141, 138]) },
       { id: 'LAB-4002', patientId, examType: 'GLUCOSE', requestedAt: dateTimeFromToday(-28, '07:05'), status: 'COMPLETED', results: buildResults('GLUCOSE', [94]) },
-      { id: 'LAB-4001', patientId, examType: 'HEMOGRAM', requestedAt: dateTimeFromToday(-28, '07:00'), status: 'COMPLETED', results: buildResults('HEMOGRAM', [13.8, 41.2, 7.1, 265]) },
+      { id: 'LAB-4001', patientId, examType: 'CBC', requestedAt: dateTimeFromToday(-28, '07:00'), status: 'COMPLETED', results: buildResults('CBC', [13.8, 41.2, 7.1, 265]) },
     ],
   };
 }
@@ -225,6 +228,7 @@ function toPrescriptionDto(prescription) {
 }
 
 function availableSlots(doctorId, date) {
+  if (isWeekend(new Date(`${date}T12:00`))) return [];
   const booked = new Set(
     db().appointments
       .filter((a) => a.doctorId === doctorId && a.status === 'SCHEDULED' && a.dateTime.startsWith(date))
@@ -246,7 +250,7 @@ export const mockClinicApi = {
   async registerPatient({ password, ...profile }) {
     await latency();
     const store = db();
-    if (!/^\d{6,12}$/.test(profile.documentNumber ?? '')) {
+    if (!/^[A-Za-z0-9]{5,15}$/.test(profile.documentNumber ?? '')) {
       throw new ApiError('El número de documento no es válido', 400);
     }
     if (store.patients.some((p) => p.documentNumber === profile.documentNumber)) {
@@ -266,7 +270,11 @@ export const mockClinicApi = {
     if (!patient || store.credentials[patient.id] !== password) {
       throw new ApiError('Número de documento o contraseña incorrectos', 401);
     }
-    return clone(patient);
+    return { token: `mock-${patient.id}`, patient: clone(patient) };
+  },
+
+  async logout() {
+    return null;
   },
 
   async getDoctors(specialty) {
@@ -280,7 +288,7 @@ export const mockClinicApi = {
     return availableSlots(doctorId, date);
   },
 
-  async bookAppointment({ patientId, specialty, doctorId, dateTime }) {
+  async bookAppointment({ patientId, specialty, doctorId, dateTime, reason }) {
     await latency();
     requirePatient(patientId);
     const doctor = doctorId
@@ -303,10 +311,12 @@ export const mockClinicApi = {
       doctorId: doctor.id,
       dateTime: `${date}T${time}`,
       status: 'SCHEDULED',
+      reason: reason || null,
     };
     db().appointments.push(appointment);
     persist();
-    return toAppointmentDto(appointment);
+    const dto = toAppointmentDto(appointment);
+    return { ...dto, reminders: [dto.reminder, 'Si no puedes asistir, cancela con al menos 24 horas de anticipación.'] };
   },
 
   async cancelAppointment(appointmentId) {
@@ -353,7 +363,7 @@ export const mockClinicApi = {
     });
   },
 
-  async createPrescription({ patientId, medications }) {
+  async createPrescription({ patientId, medications, diagnosis }) {
     await latency();
     const patient = requirePatient(patientId);
     if (!medications?.length) {
@@ -373,6 +383,7 @@ export const mockClinicApi = {
       patientId,
       doctorId: 'DOC-1',
       issuedAt: toLocalDateTime(new Date()),
+      diagnosis: diagnosis || null,
       medications,
     };
     db().prescriptions.push(prescription);

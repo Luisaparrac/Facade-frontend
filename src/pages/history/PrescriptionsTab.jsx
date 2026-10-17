@@ -6,6 +6,7 @@ import { PRESCRIPTION_STATUS, getSpecialty } from '../../constants';
 import { formatDate } from '../../utils/format';
 import { findAllergyConflict } from '../../utils/text';
 import { Modal } from '../../components/Modal';
+import { TextField } from '../../components/FormFields';
 import { Alert, Badge, Button, Card, EmptyState, IconTile, SegmentedControl } from '../../components/ui';
 
 const FILTERS = [
@@ -14,7 +15,7 @@ const FILTERS = [
   { value: 'EXPIRED', label: 'Finalizadas' },
 ];
 
-const emptyMedication = () => ({ name: '', dose: '', durationDays: '' });
+const emptyMedication = () => ({ name: '', dose: '', frequency: '', durationDays: '' });
 
 function PrescriptionCard({ prescription }) {
   const status = PRESCRIPTION_STATUS[prescription.status] ?? { label: prescription.status, tone: 'neutral' };
@@ -25,7 +26,7 @@ function PrescriptionCard({ prescription }) {
         <div className="rx-card-title">
           <IconTile icon={Pill} tone="sky" />
           <div>
-            <h3>Prescripción {prescription.id}</h3>
+            <h3>{prescription.diagnosis || `Prescripción ${prescription.id}`}</h3>
             <p className="text-muted text-sm">
               {formatDate(prescription.issuedAt)} · {prescription.doctorName}
               {specialty && ` · ${specialty.label}`}
@@ -40,14 +41,19 @@ function PrescriptionCard({ prescription }) {
             <tr>
               <th scope="col">Medicamento</th>
               <th scope="col">Dosis</th>
+              <th scope="col">Frecuencia</th>
               <th scope="col">Duración</th>
             </tr>
           </thead>
           <tbody>
             {prescription.medications.map((medication, index) => (
               <tr key={`${medication.name}-${index}`}>
-                <td className="cell-strong">{medication.name}</td>
+                <td className="cell-strong">
+                  {medication.name}
+                  {medication.instructions && <span className="cell-note">{medication.instructions}</span>}
+                </td>
                 <td>{medication.dose}</td>
+                <td>{medication.frequency ?? '—'}</td>
                 <td>{medication.durationDays} {Number(medication.durationDays) === 1 ? 'día' : 'días'}</td>
               </tr>
             ))}
@@ -63,6 +69,7 @@ function validateMedications(medications) {
     const errors = {};
     if (!medication.name.trim()) errors.name = 'Requerido';
     if (!medication.dose.trim()) errors.dose = 'Requerido';
+    if (!medication.frequency.trim()) errors.frequency = 'Requerido';
     const days = Number(medication.durationDays);
     if (!Number.isInteger(days) || days < 1 || days > 365) errors.durationDays = '1 a 365';
     return errors;
@@ -72,6 +79,7 @@ function validateMedications(medications) {
 function PrescriptionFormModal({ open, onClose, patient, onCreated }) {
   const toast = useToast();
   const [medications, setMedications] = useState([emptyMedication()]);
+  const [diagnosis, setDiagnosis] = useState('');
   const [rowErrors, setRowErrors] = useState([]);
   const [serverError, setServerError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -80,6 +88,7 @@ function PrescriptionFormModal({ open, onClose, patient, onCreated }) {
   useEffect(() => {
     if (open) {
       setMedications([emptyMedication()]);
+      setDiagnosis('');
       setRowErrors([]);
       setServerError('');
     }
@@ -101,9 +110,11 @@ function PrescriptionFormModal({ open, onClose, patient, onCreated }) {
     try {
       await clinicApi.createPrescription({
         patientId: patient.id,
+        diagnosis: diagnosis.trim(),
         medications: medications.map((m) => ({
           name: m.name.trim(),
           dose: m.dose.trim(),
+          frequency: m.frequency.trim(),
           durationDays: Number(m.durationDays),
         })),
       });
@@ -142,7 +153,7 @@ function PrescriptionFormModal({ open, onClose, patient, onCreated }) {
 
         <div className="med-rows">
           <div className="med-row med-row-head" aria-hidden>
-            <span>Medicamento</span><span>Dosis y frecuencia</span><span>Días</span><span />
+            <span>Medicamento</span><span>Dosis</span><span>Frecuencia</span><span>Días</span><span />
           </div>
           {medications.map((medication, index) => {
             const errors = rowErrors[index] ?? {};
@@ -159,10 +170,17 @@ function PrescriptionFormModal({ open, onClose, patient, onCreated }) {
                   />
                   <input
                     className={`input ${errors.dose ? 'is-invalid' : ''}`}
-                    placeholder="1 tableta cada 8 horas"
+                    placeholder="500 mg"
                     aria-label={`Dosis ${index + 1}`}
                     value={medication.dose}
                     onChange={(e) => updateMedication(index, 'dose', e.target.value)}
+                  />
+                  <input
+                    className={`input ${errors.frequency ? 'is-invalid' : ''}`}
+                    placeholder="Cada 8 horas"
+                    aria-label={`Frecuencia ${index + 1}`}
+                    value={medication.frequency}
+                    onChange={(e) => updateMedication(index, 'frequency', e.target.value)}
                   />
                   <input
                     className={`input ${errors.durationDays ? 'is-invalid' : ''}`}
@@ -210,9 +228,20 @@ function PrescriptionFormModal({ open, onClose, patient, onCreated }) {
           icon={Plus}
           className="self-start"
           onClick={() => setMedications((current) => [...current, emptyMedication()])}
+          disabled={medications.length >= 10}
         >
           Agregar medicamento
         </Button>
+
+        <TextField
+          label="Diagnóstico (opcional)"
+          name="diagnosis"
+          placeholder="Ej. Faringitis aguda"
+          maxLength={200}
+          hint="Si lo indicas, se registra también como consulta en la historia clínica."
+          value={diagnosis}
+          onChange={(e) => setDiagnosis(e.target.value)}
+        />
       </form>
     </Modal>
   );

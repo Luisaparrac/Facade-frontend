@@ -21,7 +21,8 @@ function buildBookableDates() {
   const dates = [];
   const cursor = new Date();
   while (dates.length < BOOKING_WINDOW_DAYS) {
-    if (cursor.getDay() !== 0) dates.push(toISODate(cursor)); // no Sunday service
+    const day = cursor.getDay();
+    if (day !== 0 && day !== 6) dates.push(toISODate(cursor)); // weekdays only
     cursor.setDate(cursor.getDate() + 1);
   }
   return dates;
@@ -107,8 +108,10 @@ function DoctorStep({ doctorsRequest, selected, onSelect }) {
             <span className="doctor-info">
               <span className="option-title">{doctor.fullName}</span>
               <span className="option-description">{getSpecialty(doctor.specialty).label}</span>
-              {doctor.yearsOfExperience != null && (
+              {doctor.yearsOfExperience != null ? (
                 <span className="doctor-exp">{doctor.yearsOfExperience} años de experiencia</span>
+              ) : doctor.licenseNumber && (
+                <span className="doctor-exp">Registro médico {doctor.licenseNumber}</span>
               )}
             </span>
             <span className="doctor-check" aria-hidden><Check /></span>
@@ -230,9 +233,13 @@ function BookingSuccess({ appointment, onBookAnother }) {
           <div><dt>Hora</dt><dd>{formatSlot(appointment.dateTime.slice(11, 16))}</dd></div>
           <div><dt>Código</dt><dd>{appointment.id}</dd></div>
         </dl>
-        {appointment.reminder && (
-          <Alert tone="info" title="Recordatorio">
-            <span className="alert-inline"><BellRing aria-hidden /> {appointment.reminder}</span>
+        {(appointment.reminders?.length > 0 || appointment.reminder) && (
+          <Alert tone="info" title="Recordatorios">
+            <ul className="reminder-list">
+              {(appointment.reminders?.length ? appointment.reminders : [appointment.reminder]).map((text) => (
+                <li key={text}><BellRing aria-hidden /> {text}</li>
+              ))}
+            </ul>
           </Alert>
         )}
         <div className="success-actions">
@@ -244,7 +251,7 @@ function BookingSuccess({ appointment, onBookAnother }) {
   );
 }
 
-const EMPTY_SELECTION = { specialty: null, doctor: null, date: null, time: null };
+const EMPTY_SELECTION = { specialty: null, doctor: null, date: null, time: null, reason: '' };
 
 export default function BookAppointmentPage() {
   usePageTitle('Agendar cita');
@@ -281,6 +288,7 @@ export default function BookAppointmentPage() {
         specialty: selection.specialty,
         doctorId: selection.doctor.id,
         dateTime: `${selection.date}T${selection.time}`,
+        reason: selection.reason.trim(),
       });
       setConfirmed(appointment);
       toast.success('Cita agendada correctamente');
@@ -357,6 +365,18 @@ export default function BookAppointmentPage() {
             <div><dt>Fecha</dt><dd>{selection.date && formatLongDate(selection.date)}</dd></div>
             <div><dt>Hora</dt><dd>{selection.time && formatSlot(selection.time)}</dd></div>
           </dl>
+          <div className="field">
+            <label htmlFor="reason" className="field-label">Motivo de la consulta (opcional)</label>
+            <textarea
+              id="reason"
+              className="input textarea"
+              rows={3}
+              maxLength={200}
+              placeholder="Ej. Control de presión arterial"
+              value={selection.reason}
+              onChange={(event) => select({ reason: event.target.value })}
+            />
+          </div>
         </div>
       ),
     },

@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowRight, CreditCard, Sparkles } from 'lucide-react';
 import { DEMO_CREDENTIALS } from '../api';
-import { USE_MOCK_API } from '../config';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { usePageTitle } from '../hooks/usePageTitle';
@@ -13,7 +12,7 @@ import { Alert, Button } from '../components/ui';
 function validate({ documentNumber, password }) {
   const errors = {};
   if (!documentNumber.trim()) errors.documentNumber = 'Ingresa tu número de documento';
-  else if (!/^\d{6,12}$/.test(documentNumber.trim())) errors.documentNumber = 'Debe tener entre 6 y 12 dígitos';
+  else if (!/^[A-Za-z0-9]{5,15}$/.test(documentNumber.trim())) errors.documentNumber = 'Entre 5 y 15 letras o dígitos';
   if (!password) errors.password = 'Ingresa tu contraseña';
   return errors;
 }
@@ -62,18 +61,16 @@ export default function LoginPage() {
           <p>Accede a tu portal con tu número de documento.</p>
         </header>
 
-        {USE_MOCK_API && (
-          <div className="demo-hint">
-            <Sparkles aria-hidden />
-            <div>
-              <strong>Cuenta de demostración</strong>
-              <span>Documento {DEMO_CREDENTIALS.documentNumber} · Contraseña {DEMO_CREDENTIALS.password}</span>
-            </div>
-            <button type="button" className="link-button" onClick={() => setForm({ ...DEMO_CREDENTIALS })}>
-              Usar
-            </button>
+        <div className="demo-hint">
+          <Sparkles aria-hidden />
+          <div>
+            <strong>Cuenta de demostración</strong>
+            <span>Documento {DEMO_CREDENTIALS.documentNumber} · Contraseña {DEMO_CREDENTIALS.password}</span>
           </div>
-        )}
+          <button type="button" className="link-button" onClick={() => setForm({ ...DEMO_CREDENTIALS })}>
+            Usar
+          </button>
+        </div>
 
         {serverError && <Alert tone="danger" title={serverError} />}
 
@@ -82,7 +79,6 @@ export default function LoginPage() {
             label="Número de documento"
             name="documentNumber"
             icon={CreditCard}
-            inputMode="numeric"
             autoComplete="username"
             placeholder="Ej. 1023456789"
             value={form.documentNumber}

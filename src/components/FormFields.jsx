@@ -26,6 +26,21 @@ export function TextField({ label, error, hint, icon: Icon, id, name, trailing, 
   );
 }
 
+export function SelectField({ label, error, id, name, options, className = '', ...selectProps }) {
+  const fieldId = id ?? name;
+  return (
+    <div className={`field ${error ? 'has-error' : ''} ${className}`}>
+      {label && <label htmlFor={fieldId} className="field-label">{label}</label>}
+      <select id={fieldId} name={name} className="input select" aria-invalid={Boolean(error)} {...selectProps}>
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>{option.label}</option>
+        ))}
+      </select>
+      {error && <p className="field-error">{error}</p>}
+    </div>
+  );
+}
+
 export function PasswordField(props) {
   const [visible, setVisible] = useState(false);
   return (

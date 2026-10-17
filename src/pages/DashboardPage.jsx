@@ -58,12 +58,10 @@ function NextAppointmentHero({ appointment }) {
           <span><UserRound aria-hidden /> {appointment.doctorName}</span>
         </div>
       </div>
-      {appointment.reminder && (
-        <div className="hero-reminder">
-          <BellRing aria-hidden />
-          <p>{appointment.reminder}</p>
-        </div>
-      )}
+      <div className="hero-reminder">
+        <BellRing aria-hidden />
+        <p>{appointment.reminder ?? 'Recuerda llegar 15 minutos antes y traer tu documento de identidad. Si no puedes asistir, cancela con anticipación.'}</p>
+      </div>
     </div>
   );
 }
