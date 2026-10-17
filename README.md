@@ -1,3 +1,5 @@
+**🌐 Despliegue (PROD): https://facade-frontend-three.vercel.app**
+
 # Clínica Aurora — Portal del Paciente (Frontend)
 
 Frontend del taller **Sistema de Gestión Médica (patrón Facade)**.
@@ -32,7 +34,7 @@ npm run dev              # http://localhost:5173
 
 Mientras `VITE_API_URL` esté vacía, la app funciona en **modo demo** con datos simulados en el navegador
 (se muestra la etiqueta "Modo demo" en la barra superior).
-Cuenta demo: documento `1000000001`, contraseña `demo1234`.
+Cuenta demo: documento `1000000001`, contraseña `Demo1234!`.
 
 ## Despliegue en Vercel
 
@@ -64,60 +66,43 @@ src/
 Los componentes nunca llaman a `fetch` directamente: todo pasa por `clinicApi`, igual que en el backend
 los controladores solo hablan con `ClinicaFacade`.
 
-## Contrato de la API esperado
+## Backend
 
-Base: `${VITE_API_URL}/api/clinica`. JSON en `camelCase`. Los errores deben responder con
-`{ "message": "..." }` y el código HTTP adecuado (400, 401, 404, 409, 422). El frontend muestra ese `message`.
+Repositorio: https://github.com/Luisaparrac/Facade-backend (Spring Boot 3.5, Java 17).
 
-| Método | Ruta | Fachada | Body / Query | Respuesta |
-|---|---|---|---|---|
-| POST | `/paciente` | `registrarPaciente` | `RegisterPatient` | `Patient` |
-| POST | `/login` *(extra)* | — | `{ documentNumber, password }` | `Patient` (401 si falla) |
-| GET | `/medicos?especialidad=CARDIOLOGY` | — | `especialidad` opcional | `Doctor[]` |
-| GET | `/medicos/{id}/disponibilidad?fecha=YYYY-MM-DD` *(extra)* | — | — | `["08:00","08:30",…]` |
-| POST | `/cita` | `agendarCita` | `{ patientId, specialty, doctorId, dateTime: "YYYY-MM-DDTHH:mm" }` | `Appointment` (409 si el horario está ocupado) |
-| DELETE | `/cita/{id}` *(extra)* | — | — | `Appointment` |
-| GET | `/historia/{patientId}` | `verHistoriaCompleta` | — | `FullHistory` |
-| POST | `/prescripcion` | `generarPrescripcion` | `{ patientId, medications: [{ name, dose, durationDays }] }` | `Prescription` (422 si hay alergia) |
-| POST | `/laboratorio` | `solicitarExamenes` | `{ patientId, exams: ["HEMOGRAM","GLUCOSE","LIPID_PROFILE"] }` | `LabOrder[]` |
+Base: `${VITE_API_URL}/api/clinic`. Autenticación con **Bearer token** (lo devuelve el login).
+La traducción entre los DTOs del backend y los modelos de la UI está en `src/api/httpClinicApi.js`.
 
-### Modelos
+| Método | Ruta | Uso en el frontend |
+|---|---|---|
+| POST | `/patient` | Registro (luego hace login automático) |
+| POST | `/auth/login` | Inicio de sesión → `{ token, patient }` |
+| POST | `/auth/logout` | Cerrar sesión |
+| GET | `/doctors?specialty=&date=` | Médicos por especialidad y horarios disponibles (`availableSlots`) |
+| POST | `/appointment` | Agendar cita → `{ appointment, reminders[] }` |
+| DELETE | `/appointment/{id}` | Cancelar cita |
+| GET | `/history/{patientId}` | Historia completa (dashboard e historia clínica) |
+| POST | `/prescription` | Generar prescripción (409 si hay conflicto con alergias) |
+| POST | `/lab` | Solicitar exámenes `CBC`, `GLUCOSE`, `LIPID_PROFILE` |
 
-```jsonc
-// Patient (nunca incluir password en la respuesta)
-{ "id": "PAT-1", "documentNumber": "1000000001", "firstName": "María", "lastName": "González",
-  "email": "maria@example.com", "phone": "3001234567", "birthDate": "1990-04-12",
-  "allergies": ["Penicilina"] }
+### Probar todo en local
 
-// RegisterPatient = Patient sin id + "password"
+```bash
+# Backend (requiere Java 17 y Maven)
+cd Facade-backend
+mvn spring-boot:run          # http://localhost:8080  (Swagger: /swagger-ui.html)
 
-// Doctor  — specialty: GENERAL_MEDICINE | CARDIOLOGY | DERMATOLOGY | PEDIATRICS | NEUROLOGY
-{ "id": "DOC-1", "fullName": "Dra. Laura Méndez", "specialty": "GENERAL_MEDICINE", "yearsOfExperience": 12 }
-
-// Appointment — status: SCHEDULED | COMPLETED | CANCELLED
-{ "id": "APT-1", "patientId": "PAT-1", "doctorId": "DOC-3", "doctorName": "Dra. Camila Torres",
-  "specialty": "CARDIOLOGY", "dateTime": "2026-10-20T09:30", "status": "SCHEDULED",
-  "reminder": "Recuerda llegar 15 minutos antes…" }
-
-// Prescription — status: ACTIVE | EXPIRED
-{ "id": "RX-1", "patientId": "PAT-1", "doctorName": "Dra. Laura Méndez", "specialty": "GENERAL_MEDICINE",
-  "issuedAt": "2026-09-16T10:20", "status": "ACTIVE",
-  "medications": [{ "name": "Atorvastatina", "dose": "20 mg cada noche", "durationDays": 90 }] }
-
-// LabOrder — examType: HEMOGRAM | GLUCOSE | LIPID_PROFILE ; result status: NORMAL | HIGH | LOW
-{ "id": "LAB-1", "patientId": "PAT-1", "examType": "GLUCOSE", "requestedAt": "2026-09-18T07:05",
-  "status": "COMPLETED",
-  "results": [{ "parameter": "Glucosa en ayunas", "value": 94, "unit": "mg/dL",
-                "referenceMin": 70, "referenceMax": 100, "status": "NORMAL" }] }
-
-// FullHistory (respuesta de verHistoriaCompleta)
-{ "patient": Patient,
-  "upcomingAppointments": Appointment[],   // ascendente por fecha
-  "pastAppointments": Appointment[],       // descendente
-  "consultations": [{ "id", "date", "doctorName", "specialty", "reason", "diagnosis", "notes" }],
-  "prescriptions": Prescription[],
-  "labOrders": LabOrder[] }
+# Frontend
+echo VITE_API_URL=http://localhost:8080 > .env
+npm run dev                  # http://localhost:5173
 ```
 
-En Java, usar `LocalDate`/`LocalDateTime` (Jackson los serializa como `"2026-10-20"` y `"2026-10-20T09:30:00"`,
-ambos compatibles).
+Cuenta demo sembrada por el backend: documento `1000000001`, contraseña `Demo1234!`.
+
+### CORS en producción
+
+El backend lee los orígenes permitidos de la variable `FRONTEND_URL` (separados por coma, admite patrones):
+
+```
+FRONTEND_URL=https://<proyecto>.vercel.app,http://localhost:5173
+```
